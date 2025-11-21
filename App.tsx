@@ -8,6 +8,7 @@ import { PlusCircle, Search, Tv, List, LogOut, Settings } from 'lucide-react';
 
 const PROFILES_KEY = 'series-sync-profiles';
 const OLD_DATA_KEY = 'series-sync-data-v1'; // Legacy key for migration
+const ACTIVE_PROFILE_ID_KEY = 'series-sync-active-profile-id'; // Key to remember logged in user
 
 function App() {
   // Profile State
@@ -21,16 +22,18 @@ function App() {
   const [filter, setFilter] = useState<string>('all'); 
   const [searchQuery, setSearchQuery] = useState('');
 
-  // 1. Load Profiles on Mount
+  // 1. Load Profiles and Restore Session on Mount
   useEffect(() => {
-    const storedProfiles = localStorage.getItem(PROFILES_KEY);
-    if (storedProfiles) {
+    const storedProfilesStr = localStorage.getItem(PROFILES_KEY);
+    let currentProfiles: UserProfile[] = [];
+
+    // A. Load Profiles
+    if (storedProfilesStr) {
       try {
-        const parsed = JSON.parse(storedProfiles);
-        setProfiles(parsed);
+        currentProfiles = JSON.parse(storedProfilesStr);
       } catch (e) {
         console.error("Failed to load profiles", e);
-        setProfiles([]);
+        currentProfiles = [];
       }
     } else {
       // Migration Logic: If no profiles exist but old data exists, create a Default profile
@@ -42,13 +45,22 @@ function App() {
           color: 'bg-indigo-500',
           createdAt: Date.now()
         };
-        const initialProfiles = [defaultProfile];
-        setProfiles(initialProfiles);
-        localStorage.setItem(PROFILES_KEY, JSON.stringify(initialProfiles));
+        currentProfiles = [defaultProfile];
+        localStorage.setItem(PROFILES_KEY, JSON.stringify(currentProfiles));
         
         // Migrate data
         localStorage.setItem(`series-sync-data-${defaultProfile.id}`, oldData);
-        // Optional: localStorage.removeItem(OLD_DATA_KEY); 
+      }
+    }
+
+    setProfiles(currentProfiles);
+
+    // B. Restore Session (Auto-login)
+    const lastActiveId = localStorage.getItem(ACTIVE_PROFILE_ID_KEY);
+    if (lastActiveId && currentProfiles.length > 0) {
+      const foundProfile = currentProfiles.find(p => p.id === lastActiveId);
+      if (foundProfile) {
+        setActiveProfile(foundProfile);
       }
     }
   }, []);
@@ -86,6 +98,11 @@ function App() {
 
   // --- Profile Handlers ---
 
+  const handleSelectProfile = (profile: UserProfile) => {
+    setActiveProfile(profile);
+    localStorage.setItem(ACTIVE_PROFILE_ID_KEY, profile.id); // Persist session
+  };
+
   const handleCreateProfile = (name: string) => {
     const newProfile: UserProfile = {
       id: crypto.randomUUID(),
@@ -96,7 +113,10 @@ function App() {
     const updatedProfiles = [...profiles, newProfile];
     setProfiles(updatedProfiles);
     localStorage.setItem(PROFILES_KEY, JSON.stringify(updatedProfiles));
-    setActiveProfile(newProfile); // Auto login
+    
+    // Auto login and persist
+    setActiveProfile(newProfile); 
+    localStorage.setItem(ACTIVE_PROFILE_ID_KEY, newProfile.id);
   };
 
   const handleDeleteProfile = (id: string) => {
@@ -107,13 +127,14 @@ function App() {
       localStorage.removeItem(`series-sync-data-${id}`); // Clear user data
       
       if (activeProfile?.id === id) {
-        setActiveProfile(null);
+        handleLogout(); // Use handleLogout to ensure clean state
       }
     }
   };
 
   const handleLogout = () => {
     setActiveProfile(null);
+    localStorage.removeItem(ACTIVE_PROFILE_ID_KEY); // Clear session
     setSearchQuery('');
     setFilter('all');
   };
@@ -139,9 +160,6 @@ function App() {
       lastUpdated: Date.now()
     }));
 
-    // Append new shows to existing ones
-    // Note: We are not checking for duplicates strictly by name here to keep it simple,
-    // allowing users to have multiple entries if they really want to, or they can delete dupes.
     setShows(prev => [...newShows, ...prev]);
   };
 
@@ -201,7 +219,7 @@ function App() {
     return (
       <ProfileSelector 
         profiles={profiles}
-        onSelectProfile={setActiveProfile}
+        onSelectProfile={handleSelectProfile}
         onCreateProfile={handleCreateProfile}
         onDeleteProfile={handleDeleteProfile}
       />
