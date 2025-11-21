@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Show, ShowStatus, UserProfile } from './types';
 import { ShowCard } from './components/ShowCard';
 import { AddShowModal } from './components/AddShowModal';
 import { ProfileSelector } from './components/ProfileSelector';
-import { PlusCircle, Search, Tv, List, LogOut, User } from 'lucide-react';
+import { PlusCircle, Search, Tv, List, LogOut } from 'lucide-react';
 
 const PROFILES_KEY = 'series-sync-profiles';
 const OLD_DATA_KEY = 'series-sync-data-v1'; // Legacy key for migration
